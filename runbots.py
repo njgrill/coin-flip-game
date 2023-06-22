@@ -5,7 +5,7 @@ import os
 import uuid
 from subprocess import Popen, PIPE
 
-bot_scripts = ["samplecode.py","samplecode.py","samplecode.py"]
+bot_scripts = ["random_bot.py","mle_estimation.py"]
 
 parser = argparse.ArgumentParser()
 parser.add_argument("host")
