@@ -82,7 +82,7 @@ class Client:
         game_id = parsed_args.game_id
         username = parsed_args.username
 
-        logging.basicConfig(filename=f"./logs/{parsed_args.output_logs}", encoding='utf-8', level=logging.DEBUG)
+        logging.basicConfig(filename=f"./logs/{game_id}/{parsed_args.output_logs}", encoding='utf-8', level=logging.DEBUG)
         logging.info(parsed_args)
         logging.info(f"{host} {port} {game_id} {username}")
         return Client(

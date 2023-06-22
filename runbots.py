@@ -1,6 +1,7 @@
 import argparse
 import socket
 import sys
+import os
 import uuid
 from subprocess import Popen, PIPE
 
@@ -17,6 +18,7 @@ port = int(parsed_args.port)
 game_id = parsed_args.game_id
 
 processes = []
+os.mkdir(f"./logs/{game_id}")
 for bot in bot_scripts:
     un = bot.split(".")[0] + str(uuid.uuid4())[0:5]
     log_file = un + ".log"
