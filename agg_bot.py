@@ -5,6 +5,7 @@ import sys
 import re
 import random
 import pickle
+import numpy as np
 from threading import Thread
 import logging
 
@@ -32,7 +33,7 @@ def parse_string(client, message):
     client.actual_results.append(result)
     client.logger.info(newSpltMsg)
 
-    client.mle = (client.num_heads + .25) / (client.total_flips + .5)
+    client.mle = (client.num_heads + 1) / (client.total_flips + 2)
 
     client.total_flips = client.total_flips + 1
     client.num_heads = (client.num_heads + 1) if (result == "HEADS") else (client.num_heads)
@@ -46,7 +47,7 @@ def parse_string(client, message):
         username = newSpltMsg[i][1]
         client.logger.info(f"{username=}")
         size_traded = int(newSpltMsg[i+1][1])
-        total = int(newSpltMsg[i+1][2])
+        total = int(newSpltMsg[i+2][1])
 
         other_result = "HEADS" if (result == "TAILS") else "TAILS"
         # if username not in client.player_results:
@@ -61,6 +62,7 @@ def parse_string(client, message):
             last_bet_size.append((username, size_traded))
             cur_total.append((username, total))
 
+    logging.info("finished range")
     cur_choice.sort()
     last_bet_size.sort()
     cur_total.sort()
@@ -71,7 +73,11 @@ def parse_string(client, message):
     client.shared_information.cur_round = client.total_flips
     client.shared_information.add_to_queue([client.mle, last_bet_size, cur_total], [cur_choice])
 
-    vec_inputs = [client.mle, last_bet_size, cur_total].append(cur_choice).flatten()
+    logging.info("about to make prediction")
+    vec_inputs = [client.mle, last_bet_size, cur_total]
+    vec_inputs.append(cur_choice)
+    vec_inputs = np.asarray(vec_inputs)
+    vec_inputs = vec_inputs.flatten()
     client.recent_predict = vec_inputs
     client.logger.info(cur_choice)
 
