@@ -9,6 +9,8 @@ class SharedInformation:
         self.choice_inputs = []
         self.choice_outputs = []
 
+        self.cur_round = 0
+
         self.queue_inputs = []
         self.queue_outputs = []
         self._queue_lock = threading.Lock()
