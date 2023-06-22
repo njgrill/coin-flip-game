@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 from shared_information import SharedInformation
 from sklearn import tree
 
@@ -30,9 +31,11 @@ def convert_to_features(featureType, raw_inputs, raw_outputs):
 # Outputs: [total HEADS bets, total TAILS bets]
 def train_model(sharedInfo: SharedInformation, featureType: str):
     while(True):
+        logging.info("starting train_model")
         raw_inputs, raw_outputs = sharedInfo.copy_queue()
 
-        curr_inputs, curr_outputs = convert_to_features(featureType, raw_inputs, raw_outputs)
+        if(len(raw_inputs) > 0):
+            curr_inputs, curr_outputs = convert_to_features(featureType, raw_inputs, raw_outputs)
 
         if (len(curr_inputs) > 0):
             clf = tree.DecisionTreeRegressor(max_depth=MAX_DEPTH)

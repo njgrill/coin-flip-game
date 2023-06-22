@@ -6,6 +6,11 @@ import re
 import logging
 import random
 import pickle
+from threading import Thread
+
+# from coin-flip-game.decision_tree import train_model;
+
+from decision_tree import train_model
 
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.base import clone
@@ -64,6 +69,9 @@ def parse_string(client, message):
 
     client.shared_information.cur_round = client.total_flips
     client.shared_information.add_to_queue([client.mle, last_bet_size, cur_total], [cur_choice])
+
+    vec_inputs = [client.mle, last_bet_size, cur_total].append(cur_choice).flatten()
+    client.recent_predict = vec_inputs
     logging.info(cur_choice)
 
 
@@ -91,7 +99,7 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
         client.model_exists = True
 
     if client.model_exists:
-        total_heads, total_tails = client.model.predict_shit()
+        total_heads, total_tails = client.model.predict(client.recent_predict)
         avg_bet = (total_heads + total_tails) / client.num_other_players
         ev_heads = client.mle * total_tails / total_heads
         ev_tails = (1-client.mle) * total_heads / total_tails
@@ -215,6 +223,9 @@ class Client:
         self.shared_information = SharedInformation()
         self.model_exists = False
         self.num_other_players = 1
+        # modelThread = Thread(target = train_model, args= (self.shared_information, "Agg", logging,))
+        modelThread = Thread(target = train_model, args = (self.shared_information, "Agg", logging,))
+        modelThread.start()
         logging.info("done init")
 
     def run(self):

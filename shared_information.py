@@ -1,5 +1,6 @@
 import pickle
 import threading
+import logging
 from typing import Union
 
 from sklearn.tree import DecisionTreeRegressor
@@ -27,6 +28,8 @@ class SharedInformation:
 
     def copy_queue(self):
         with self._queue_lock:
+            if (len(self.queue_inputs) > 0):
+                logging.info(f"Copying over {len(self.queue_inputs)} elems...")
             self.choice_inputs.append(self.queue_inputs)
             self.choice_outputs.append(self.queue_outputs)
             queue_inputs = self.queue_inputs.copy
