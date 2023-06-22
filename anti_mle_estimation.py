@@ -1,22 +1,9 @@
 import argparse
-import math
 import socket
 import sys
 import re
-import random
-import pickle
-from threading import Thread
 import logging
-
-
-# from coin-flip-game.decision_tree import train_model;
-
-from decision_tree import train_model
-
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.base import clone
-from shared_information import SharedInformation
-
+import random
 
 class Player:
     def __init__(self):
@@ -30,50 +17,23 @@ def parse_string(client, message):
     newSpltMsg = [elem.split('=') for elem in spltMsg]
     result = newSpltMsg[3][1]
     client.actual_results.append(result)
-    client.logger.info(newSpltMsg)
+    logging.info(newSpltMsg)
 
-    client.mle = (client.num_heads + .25) / (client.total_flips + .5)
-
-    client.total_flips = client.total_flips + 1
+    client.total_flips = client.total_flips + 1 
     client.num_heads = (client.num_heads + 1) if (result == "HEADS") else (client.num_heads)
 
-    cur_choice = []
-    last_bet_size = []
-    cur_total = []
-    client.num_other_players = int((len(newSpltMsg) - 5)/3) - 1
     for i in range (5, len(newSpltMsg), 3):
-        client.logger.info(newSpltMsg[i])
+        logging.info(newSpltMsg[i])
         username = newSpltMsg[i][1]
-        client.logger.info(f"{username=}")
+        logging.info(f"{username=}")
         size_traded = int(newSpltMsg[i+1][1])
-        total = int(newSpltMsg[i+1][2])
-
         other_result = "HEADS" if (result == "TAILS") else "TAILS"
-        # if username not in client.player_results:
-        #     client.player_results[username] = Player()
-        # client.player_results[username].choices.append(result if size_traded > 0 else other_result)
-        # logging.info(client.player_results.get(username))
-        # client.player_results[username].trades.append(size_traded)
-        # client.player_results[username].total = int(newSpltMsg[i+2][1])
-
-        if username != client.username:
-            cur_choice.append((username, 1 if other_result == "HEADS" else 0))
-            last_bet_size.append((username, size_traded))
-            cur_total.append((username, total))
-
-    cur_choice.sort()
-    last_bet_size.sort()
-    cur_total.sort()
-    cur_choice = [x[1] for x in cur_choice]
-    last_bet_size = [x[1] for x in last_bet_size]
-    cur_total = [x[1] for x in cur_total]
-
-    client.shared_information.cur_round = client.total_flips
-    client.shared_information.add_to_queue([client.mle, last_bet_size, cur_total], [cur_choice])
-
-    vec_inputs = [client.mle, last_bet_size, cur_total].append(cur_choice).flatten()
-    client.recent_predict = vec_inputs
-    client.logger.info(cur_choice)
+        if username not in client.player_results:
+            client.player_results[username] = Player()
+        client.player_results[username].choices.append(result if size_traded > 0 else other_result)
+        logging.info(client.player_results.get(username))
+        client.player_results[username].trades.append(size_traded)
+        client.player_results[username].total = int(newSpltMsg[i+2][1])
 
 
 def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
@@ -94,29 +54,7 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
        int
            Wager size.
     """
-    is_new, new_model = client.shared_information.get_decision_tree()
-    if is_new:
-        client.model = clone(new_model)
-        client.model_exists = True
-
-    if client.model_exists:
-        total_heads, total_tails = client.model.predict(client.recent_predict)
-        avg_bet = (total_heads + total_tails) / client.num_other_players
-        ev_heads = client.mle * total_tails / total_heads
-        ev_tails = (1-client.mle) * total_heads / total_tails
-
-        bet_amount = avg_bet
-        if bet_amount < 1000:
-            bet_amount = 1000
-        elif bet_amount > 50000:
-            bet_amount = 50000
-        if bet_amount > client.total:
-            bet_amount = max(1000, int(client.total/2))
-        # todo: have better amount stuff
-        return ("HEADS", bet_amount) if ev_heads > ev_tails else ("TAILS", bet_amount)
-        # return "HEADS" if prediction == 1 else "TAILS", 1000
-    else:
-        return "HEADS" if (client.num_heads >= (client.total_flips / 2)) else "TAILS", 1000
+    return ("HEADS" if (client.num_heads < (client.total_flips / 2)) else "TAILS", 1000)
 
 
 def stub_handle_auction_result(client, message: str) -> None:
@@ -177,21 +115,19 @@ class Client:
         game_id = parsed_args.game_id
         username = parsed_args.username
 
-        logger = logging
-        logger.basicConfig(filename=f"./logs/{game_id}/{parsed_args.output_logs}", encoding='utf-8', level=logging.DEBUG)
-        logger.info(parsed_args)
-        logger.info(f"{host} {port} {game_id} {username}")
+        logging.basicConfig(filename=f"./logs/{game_id}/{parsed_args.output_logs}", encoding='utf-8', level=logging.DEBUG)
+        logging.info(parsed_args)
+        logging.info(f"{host} {port} {game_id} {username}")
         return Client(
             host=host,
             port=port,
             game_id=game_id,
             username=username,
-            logger=logger,
             auction_request_hook=auction_request_hook,
             auction_result_hook=auction_result_hook
         )
 
-    def __init__(self, host, port, game_id, username, logger, auction_request_hook, auction_result_hook):
+    def __init__(self, host, port, game_id, username, auction_request_hook, auction_result_hook):
         """
            Initialize an exchange client instance.
 
@@ -210,6 +146,7 @@ class Client:
            auction_result_hook
                Function callback for the raw `MT=AUCTION_RESULT` message string received from the Auction Exchange Server.
         """
+        logging.info("init")
         self.host = host
         self.port = port
         self.game_id = game_id
@@ -222,14 +159,7 @@ class Client:
         self.total_flips = 0
         self.actual_results = list()
         self.player_results = dict()
-        self.shared_information = SharedInformation()
-        self.model_exists = False
-        self.num_other_players = 1
-        self.logger = logger
-        # modelThread = Thread(target = train_model, args= (self.shared_information, "Agg", logging,))
-        modelThread = Thread(target = train_model, args = (self.shared_information, "Agg", self.logger,))
-        modelThread.start()
-        self.logger.info("done init")
+        logging.info("done init")
 
     def run(self):
         """
@@ -283,7 +213,7 @@ class Client:
         elif message_type == "AUCTION_RESULT":
             self.auction_result_hook(self, message)
         elif message_type == "REJECT":
-            self.logger.error("Received reject message: " + message)
+            logging.error("Received reject message: " + message)
         if message_type == "END_OF_GAME":
             self.keep_running = False
             sys.exit(0)
