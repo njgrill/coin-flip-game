@@ -1,3 +1,4 @@
+import pickle
 import threading
 from typing import Union
 
@@ -41,3 +42,9 @@ class SharedInformation:
             if not self.model_outdated:
                 return False, None
             return True, self.model_trained
+
+    def write_to_files(self, directory):
+        # Write out the model
+        pickle.dump(self.model_trained, open(f"./logs/{directory}/trained_model", 'wb'))
+
+        # Write out params
