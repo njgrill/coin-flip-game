@@ -29,9 +29,9 @@ def convert_to_features(featureType, raw_inputs, raw_outputs):
 
 # Inputs: n choices, n amounts, n totals
 # Outputs: [total HEADS bets, total TAILS bets]
-def train_model(sharedInfo: SharedInformation, featureType: str):
+def train_model(sharedInfo: SharedInformation, featureType: str, logger):
     while(True):
-        logging.info("starting train_model")
+        logger.info("starting train_model")
         raw_inputs, raw_outputs = sharedInfo.copy_queue()
 
         if(len(raw_inputs) > 0):
