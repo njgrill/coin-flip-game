@@ -11,14 +11,32 @@ class Player:
         self.trades = list() # Amount traded
         self.total = 1000000
 
-num_heads = 0
-total_flips = 0
-global_username = ''
-actual_results = list()
-player_results = dict[str : Player]
+
+def parse_string(client, message):
+    spltMsg = message[1:-1].split(':')
+    newSpltMsg = [elem.split('=') for elem in spltMsg]
+    result = newSpltMsg[3][1]
+    client.actual_results.append(result)
+    logging.info(newSpltMsg)
+
+    client.total_flips = client.total_flips + 1 
+    client.num_heads = (client.num_heads + 1) if (result == "HEADS") else (client.num_heads)
+
+    for i in range (5, len(newSpltMsg), 3):
+        logging.info(newSpltMsg[i])
+        username = newSpltMsg[i][1]
+        logging.info(f"{username=}")
+        size_traded = int(newSpltMsg[i+1][1])
+        other_result = "HEADS" if (result == "TAILS") else "TAILS"
+        if username not in client.player_results:
+            client.player_results[username] = Player()
+        client.player_results[username].choices.append(result if size_traded > 0 else other_result)
+        logging.info(client.player_results.get(username))
+        client.player_results[username].trades.append(size_traded)
+        client.player_results[username].total = int(newSpltMsg[i+2][1])
 
 
-def stub_handle_auction_request(auction_id: int) -> tuple[str, int]:
+def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
     """
        Default `auction_result_hook` argument of `Client.initialize_client`. Not currently implemented.
 
@@ -36,10 +54,10 @@ def stub_handle_auction_request(auction_id: int) -> tuple[str, int]:
        int
            Wager size.
     """
-    return ("HEADS" if (num_heads >= (total_flips / 2)) else "TAILS", 1000)
+    return ("HEADS" if (client.num_heads >= (client.total_flips / 2)) else "TAILS", 1000)
 
 
-def stub_handle_auction_result(message: str) -> None:
+def stub_handle_auction_result(client, message: str) -> None:
     """
        Default `auction_result_hook` argument of `Client.initialize_client`. Prints `message`.
 
@@ -51,22 +69,9 @@ def stub_handle_auction_result(message: str) -> None:
            Raw `MT=AUCTION_RESULT` message sent by the Auction Exchange Server.
     """
     # ['MT', 'GI', 'ID', 'HT', 'TS', ['UN', 'SZ', 'TO'] ]
-    spltMsg = message[1:-1].split(':')
-    newSpltMsg = [elem.split('=') for elem in spltMsg]
-    result = newSpltMsg[3][1]
-    actual_results.append(result)
-
-    total_flips = total_flips + 1 
-    num_heads = (num_heads + 1) if (result == "HEADS") else (num_heads)
-
-    for i in range (5, len(newSpltMsg), 3):
-        username = newSpltMsg[i][1]
-        size_traded = newSpltMsg[i+1][1]
-        other_result = "HEADS" if (result == "TAILS") else "TAILS"
-        player_results[username].choices.append(result if size_traded > 0 else other_result)
-        player_results[username].trades.append(size_traded)
-        player_results[username].total = newSpltMsg[i+2][1]
-    logging.info(player_results)
+    logging.info("about to parse string")
+    parse_string(client, message)
+    logging.info(client.player_results)
 
 
 class Client:
@@ -109,7 +114,6 @@ class Client:
         port = int(parsed_args.port)
         game_id = parsed_args.game_id
         username = parsed_args.username
-        global_username = username
 
         logging.basicConfig(filename=f"./logs/{game_id}/{parsed_args.output_logs}", encoding='utf-8', level=logging.DEBUG)
         logging.info(parsed_args)
@@ -151,6 +155,10 @@ class Client:
         self.auction_request_hook = auction_request_hook
         self.auction_result_hook = auction_result_hook
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.num_heads = 0
+        self.total_flips = 0
+        self.actual_results = list()
+        self.player_results = dict()
         logging.info("done init")
 
     def run(self):
@@ -197,13 +205,13 @@ class Client:
     def _handle_server_message(self, message_type, message):
         if message_type == "AUCTION_REQUEST":
             auction_id = int(re.search('ID=(\d*)', message).group(1))
-            ht, sz = self.auction_request_hook(auction_id)
+            ht, sz = self.auction_request_hook(self, auction_id)
             message = "|MT=AUCTION_RESPONSE:UN={}:GI={}:ID={}:HT={}:SZ={}|".format(
                 self.username, self.game_id, auction_id, ht, sz
             )
             self._send_message(message)
         elif message_type == "AUCTION_RESULT":
-            self.auction_result_hook(message)
+            self.auction_result_hook(self, message)
         elif message_type == "REJECT":
             logging.error("Received reject message: " + message)
         if message_type == "END_OF_GAME":
