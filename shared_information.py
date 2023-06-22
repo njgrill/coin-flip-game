@@ -29,8 +29,11 @@ class SharedInformation:
         with self._queue_lock:
             self.choice_inputs.append(self.queue_inputs)
             self.choice_outputs.append(self.queue_outputs)
+            queue_inputs = self.queue_inputs.copy
+            queue_outputs = self.queue_outputs.copy
             self.queue_inputs = []
             self.queue_outputs = []
+            return queue_inputs, queue_outputs
 
     def copy_decision_tree(self, model_trained):
         with self._model_lock:
