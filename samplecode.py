@@ -2,6 +2,7 @@ import argparse
 import socket
 import sys
 import re
+import logging
 
 
 def stub_handle_auction_request(auction_id: int) -> tuple[str, int]:
@@ -71,12 +72,18 @@ class Client:
         parser.add_argument("port")
         parser.add_argument("-gi", "--game_id", required=True)
         parser.add_argument("-un", "--username", required=True)
+        parser.add_argument("-L", "--log_level", default=logging.DEBUG)
+        parser.add_argument("-o", "--output_logs", required=True)
 
         parsed_args = parser.parse_args(*args)
         host = parsed_args.host
         port = int(parsed_args.port)
         game_id = parsed_args.game_id
         username = parsed_args.username
+
+        logging.basicConfig(filename=f"./logs/{parsed_args.output_logs}", encoding='utf-8', level=logging.DEBUG)
+        logging.info(parsed_args)
+        logging.info(f"{host} {port} {game_id} {username}")
         return Client(
             host=host,
             port=port,
@@ -105,6 +112,7 @@ class Client:
            auction_result_hook
                Function callback for the raw `MT=AUCTION_RESULT` message string received from the Auction Exchange Server.
         """
+        logging.info("init")
         self.host = host
         self.port = port
         self.game_id = game_id
@@ -113,25 +121,29 @@ class Client:
         self.auction_request_hook = auction_request_hook
         self.auction_result_hook = auction_result_hook
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        logging.info("done init")
 
     def run(self):
         """
            Log into the Auction Exchange Server and respond to auction requests.
         """
-        print(self.host, self.port, self.username, self.game_id)
-        self.sock.connect((self.host, self.port))
-        print("connected")
-        print("|MT=LOGIN:GI={}:UN={}|".format(self.game_id, self.username))
+        logging.info("run")
+        logging.info(f"{self.host} {self.port} {self.username} {self.game_id}")
+        try:
+            self.sock.connect((self.host, self.port))
+        except Exception as e:
+            logging.error(e)
+        logging.info("connected")
+        logging.debug("|MT=LOGIN:GI={}:UN={}|".format(self.game_id, self.username))
         self._send_message("|MT=LOGIN:GI={}:UN={}|".format(self.game_id, self.username))
 
         received = ''
         self.keep_running = True
-        print("loop time")
         while self.keep_running:
             try:
                 received = self._run_loop(received)
             except Exception as ex:
-                print(ex)
+                logging.error(ex)
                 self.keep_running = False
         self.sock.shutdown(0)
 
@@ -140,14 +152,14 @@ class Client:
         if not res:
             raise Exception("Server socket closed")
         received += res.decode("ascii")
-        print(received)
+        logging.debug(received)
         match = self._MESSAGE_PATTERN.search(received)
         if match is None:
             return received
 
         message = match.group(0)
         message_type = match.group(1)
-        print(message)
+        logging.debug(message)
         self._handle_server_message(message_type, message)
         received = received[len(message):]
         return received
@@ -163,7 +175,7 @@ class Client:
         elif message_type == "AUCTION_RESULT":
             self.auction_result_hook(message)
         elif message_type == "REJECT":
-            print("Received reject message: " + message)
+            logging.error("Received reject message: " + message)
         if message_type == "END_OF_GAME":
             self.keep_running = False
             sys.exit(0)
