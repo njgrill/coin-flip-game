@@ -3,6 +3,7 @@ import socket
 import sys
 import re
 import logging
+import random
 
 
 def stub_handle_auction_request(auction_id: int) -> tuple[str, int]:
@@ -23,7 +24,7 @@ def stub_handle_auction_request(auction_id: int) -> tuple[str, int]:
        int
            Wager size.
     """
-    raise NotImplemented("Put your implementation here")
+    return (random.choice(["HEADS", "TAILS"]), 1000)
 
 
 def stub_handle_auction_result(message: str) -> None:
@@ -152,14 +153,14 @@ class Client:
         if not res:
             raise Exception("Server socket closed")
         received += res.decode("ascii")
-        logging.debug(received)
+        logging.info(received)
         match = self._MESSAGE_PATTERN.search(received)
         if match is None:
             return received
 
         message = match.group(0)
         message_type = match.group(1)
-        logging.debug(message)
+        logging.info(message)
         self._handle_server_message(message_type, message)
         received = received[len(message):]
         return received
