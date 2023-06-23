@@ -6,7 +6,7 @@ import uuid
 from subprocess import Popen, PIPE
 
 # bot_scripts = ["agg_bot.py", "mle_estimation.py", "anti_mle_estimation.py"]
-bot_scripts = ["mle_estimation.py" for _ in range(10)]
+bot_scripts = ["mle_estimation.py" for _ in range(1)]
 bot_scripts.append("agg_bot.py")
 
 parser = argparse.ArgumentParser()

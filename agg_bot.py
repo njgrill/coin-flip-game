@@ -1,4 +1,5 @@
 import argparse
+import copy
 import math
 import socket
 import sys
@@ -26,6 +27,26 @@ class Player:
         self.trades = list() # Amount traded
         self.total = 1000000
 
+def size_traded_to_amount_bet(client_amt_traded, size_traded, min_val: float = 1000.):
+    # logging.info(f"IMPORTANT: {size_traded=}")
+    new_size_traded = abs(np.asarray(size_traded))
+    # logging.info(f"IMPORTANT: {new_size_traded=}")
+    # pos_trades = np.asarray([elem for elem in size_traded if elem >= 0])
+    pos_trades = [elem for elem in size_traded if elem >= 0]
+    # logging.info(f"IMPORTANT: {pos_trades=}")
+    # logging.info(f"IMPORTANT: {min_val=}")
+    if (min(pos_trades) < min_val):
+        if (min(pos_trades) == 0):
+            pos_trades = [elem + min_val for elem in pos_trades]
+        else:
+            pos_trades_min = float(min(pos_trades))
+            pos_trades = [elem * (min_val / pos_trades_min) for elem in pos_trades]
+    # logging.info(f"IMPORTANT: {size_traded=}")
+    for i in range(len(size_traded)):
+        if size_traded[i] >= 0:
+            new_size_traded[i] = pos_trades.pop(0)
+    logging.info(f"IMPORTANT: {new_size_traded=}")
+    return new_size_traded
 
 def parse_string(client, message):
     spltMsg = message[1:-1].split(':')
@@ -63,6 +84,7 @@ def parse_string(client, message):
             last_bet_size.append((username, size_traded))
             cur_total.append((username, total))
         else:
+            client.size_traded = size_traded
             client.total = total
 
     logging.info("finished range")
@@ -70,7 +92,8 @@ def parse_string(client, message):
     last_bet_size.sort()
     cur_total.sort()
     cur_choice = [x[1] for x in cur_choice]
-    last_bet_size = [x[1] for x in last_bet_size]
+    min_val = client.last_bet if client.size_traded >= 0 else 1000
+    last_bet_size = size_traded_to_amount_bet(client.size_traded, [x[1] for x in last_bet_size], min_val=min_val)
     cur_total = [x[1] for x in cur_total]
 
     client.shared_information.cur_round = client.total_flips
@@ -114,9 +137,9 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
         client.model_exists = True
 
     if client.model_exists:
-        logging.info(f"about to predict with {client.recent_predict=}")
+        logging.info(f"IMPORTANT: about to predict with {client.recent_predict=}")
         total_heads, total_tails = tuple(client.model.predict(client.recent_predict)[0])
-        logging.info("after predict")
+        logging.info(f"IMPORTANT: just predicted {total_heads=} and {total_tails=}")
         avg_bet = (total_heads + total_tails) / client.num_other_players
 
         bet_amount = avg_bet
@@ -129,10 +152,12 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
 
         ev_heads = (client.mle * (bet_amount / (total_heads + bet_amount)) * (total_heads + total_tails + bet_amount)) + ((1. - client.mle) * (-1. * bet_amount))
         ev_tails = ((1. - client.mle) * (bet_amount / (total_tails + bet_amount)) * (total_heads + total_tails + bet_amount)) + (client.mle * (-1. * bet_amount))
+        client.last_bet = bet_amount
         # todo: have better amount stuff
         return ("HEADS", bet_amount) if ev_heads > ev_tails else ("TAILS", bet_amount)
         # return "HEADS" if prediction == 1 else "TAILS", 1000
     else:
+        client.last_bet = 1000
         return "HEADS" if (client.num_heads >= (client.total_flips / 2)) else "TAILS", 1000
 
 
@@ -244,6 +269,8 @@ class Client:
         self.model_exists = False
         self.num_other_players = 1
         self.total = 1000000
+        self.size_traded = 1000
+        self.last_bet = 1000
         # modelThread = Thread(target = train_model, args= (self.shared_information, "Agg", logging,))
         modelThread = Thread(target = train_model, args = (self.shared_information, "Agg", self.logger,), daemon=True)
         modelThread.start()
