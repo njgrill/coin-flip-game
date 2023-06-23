@@ -3,7 +3,7 @@ import logging
 from shared_information import SharedInformation
 from sklearn import tree
 
-MAX_DEPTH = 3
+MAX_DEPTH = None
 all_inputs = np.asarray([])
 all_outputs = np.asarray([])
 curr_round = 0

@@ -55,15 +55,18 @@ def parse_string(client, message):
     client.actual_results.append(result)
     client.logger.info(newSpltMsg)
 
-    client.mle = (client.num_heads + 1) / (client.total_flips + 2)
-
     client.total_flips = client.total_flips + 1
     client.num_heads = (client.num_heads + 1) if (result == "HEADS") else (client.num_heads)
+
+    client.mle = (client.num_heads + 1) / (client.total_flips + 2)
 
     cur_choice = []
     last_bet_size = []
     cur_total = []
     client.num_other_players = int((len(newSpltMsg) - 5)/3) - 1
+    # other_result = "HEADS" if (result == "TAILS") else "TAILS"
+    result_num = 1 if (result == "HEADS") else 0
+    other_result_num = 0 if (result_num == 1) else 1
     for i in range (5, len(newSpltMsg), 3):
         client.logger.info(newSpltMsg[i])
         username = newSpltMsg[i][1]
@@ -71,7 +74,6 @@ def parse_string(client, message):
         size_traded = int(newSpltMsg[i+1][1])
         total = int(newSpltMsg[i+2][1])
 
-        other_result = "HEADS" if (result == "TAILS") else "TAILS"
         # if username not in client.player_results:
         #     client.player_results[username] = Player()
         # client.player_results[username].choices.append(result if size_traded > 0 else other_result)
@@ -80,7 +82,7 @@ def parse_string(client, message):
         # client.player_results[username].total = int(newSpltMsg[i+2][1])
 
         if username != client.username:
-            cur_choice.append((username, 1 if other_result == "HEADS" else 0))
+            cur_choice.append((username, result_num if size_traded > 0 else other_result_num))
             last_bet_size.append((username, size_traded))
             cur_total.append((username, total))
         else:
@@ -97,10 +99,12 @@ def parse_string(client, message):
     cur_total = [x[1] for x in cur_total]
 
     client.shared_information.cur_round = client.total_flips
-    client.shared_information.add_to_queue([client.mle, last_bet_size, cur_total], cur_choice)
+    # client.shared_information.add_to_queue([client.mle, last_bet_size, cur_total], cur_choice)
+    client.shared_information.add_to_queue([client.mle, last_bet_size], cur_choice)
 
     logging.info("about to make prediction")
-    vec_inputs = np.hstack([client.mle, last_bet_size, cur_total])
+    # vec_inputs = np.hstack([client.mle, last_bet_size, cur_total])
+    vec_inputs = np.hstack([client.mle, last_bet_size])
     vec_inputs = np.append(vec_inputs, [cur_choice])
 
     vec_inputs = np.hstack(vec_inputs)
@@ -153,11 +157,16 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
         ev_heads = (client.mle * (bet_amount / (total_heads + bet_amount)) * (total_heads + total_tails + bet_amount)) + ((1. - client.mle) * (-1. * bet_amount))
         ev_tails = ((1. - client.mle) * (bet_amount / (total_tails + bet_amount)) * (total_heads + total_tails + bet_amount)) + (client.mle * (-1. * bet_amount))
         client.last_bet = bet_amount
+        bet_choice = "HEADS" if ev_heads > ev_tails else "TAILS"
+        logging.info(f"IMPORTANT: Betting {bet_choice} with {ev_heads=} and {ev_tails=}")
         # todo: have better amount stuff
+        if (ev_heads == ev_tails):
+            return ("HEADS", bet_amount) if client.mle >= 0.5 else ("TAILS", bet_amount)
         return ("HEADS", bet_amount) if ev_heads > ev_tails else ("TAILS", bet_amount)
         # return "HEADS" if prediction == 1 else "TAILS", 1000
     else:
         client.last_bet = 1000
+        logging.info(f"IMPORTANT: Default bet...")
         return "HEADS" if (client.num_heads >= (client.total_flips / 2)) else "TAILS", 1000
 
 
