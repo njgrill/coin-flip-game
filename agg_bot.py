@@ -8,6 +8,7 @@ import pickle
 import numpy as np
 from threading import Thread
 import logging
+from copy import deepcopy
 
 
 # from coin-flip-game.decision_tree import train_model;
@@ -61,6 +62,8 @@ def parse_string(client, message):
             cur_choice.append((username, 1 if other_result == "HEADS" else 0))
             last_bet_size.append((username, size_traded))
             cur_total.append((username, total))
+        else:
+            client.total = total
 
     logging.info("finished range")
     cur_choice.sort()
@@ -71,14 +74,17 @@ def parse_string(client, message):
     cur_total = [x[1] for x in cur_total]
 
     client.shared_information.cur_round = client.total_flips
-    client.shared_information.add_to_queue([client.mle, last_bet_size, cur_total], [cur_choice])
+    client.shared_information.add_to_queue([client.mle, last_bet_size, cur_total], cur_choice)
 
     logging.info("about to make prediction")
-    vec_inputs = [client.mle, last_bet_size, cur_total]
-    vec_inputs.append(cur_choice)
-    vec_inputs = np.asarray(vec_inputs)
-    vec_inputs = vec_inputs.flatten()
-    client.recent_predict = vec_inputs
+    vec_inputs = np.hstack([client.mle, last_bet_size, cur_total])
+    vec_inputs = np.append(vec_inputs, [cur_choice])
+
+    vec_inputs = np.hstack(vec_inputs)
+    logging.info(f"about to maek {vec_inputs=}")
+    # vec_inputs = vec_inputs.flatten()
+    client.recent_predict = vec_inputs.reshape(1, -1)
+    logging.info(f"about to maek again {vec_inputs=}")
     client.logger.info(cur_choice)
 
 
@@ -101,15 +107,17 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
            Wager size.
     """
     is_new, new_model = client.shared_information.get_decision_tree()
+    logging.info(f"{is_new=}, {new_model=}")
     if is_new:
-        client.model = clone(new_model)
+        logging.info("new model...")
+        client.model = deepcopy(new_model)
         client.model_exists = True
 
     if client.model_exists:
-        total_heads, total_tails = client.model.predict(client.recent_predict)
+        logging.info(f"about to predict with {client.recent_predict=}")
+        total_heads, total_tails = tuple(client.model.predict(client.recent_predict)[0])
+        logging.info("after predict")
         avg_bet = (total_heads + total_tails) / client.num_other_players
-        ev_heads = client.mle * total_tails / total_heads
-        ev_tails = (1-client.mle) * total_heads / total_tails
 
         bet_amount = avg_bet
         if bet_amount < 1000:
@@ -118,6 +126,9 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
             bet_amount = 50000
         if bet_amount > client.total:
             bet_amount = max(1000, int(client.total/2))
+
+        ev_heads = (client.mle * (bet_amount / (total_heads + bet_amount)) * (total_heads + total_tails + bet_amount)) + ((1. - client.mle) * (-1. * bet_amount))
+        ev_tails = ((1. - client.mle) * (bet_amount / (total_tails + bet_amount)) * (total_heads + total_tails + bet_amount)) + (client.mle * (-1. * bet_amount))
         # todo: have better amount stuff
         return ("HEADS", bet_amount) if ev_heads > ev_tails else ("TAILS", bet_amount)
         # return "HEADS" if prediction == 1 else "TAILS", 1000
@@ -228,12 +239,13 @@ class Client:
         self.total_flips = 0
         self.actual_results = list()
         self.player_results = dict()
-        self.shared_information = SharedInformation()
+        self.logger = logger
+        self.shared_information = SharedInformation(self.logger)
         self.model_exists = False
         self.num_other_players = 1
-        self.logger = logger
+        self.total = 1000000
         # modelThread = Thread(target = train_model, args= (self.shared_information, "Agg", logging,))
-        modelThread = Thread(target = train_model, args = (self.shared_information, "Agg", self.logger,))
+        modelThread = Thread(target = train_model, args = (self.shared_information, "Agg", self.logger,), daemon=True)
         modelThread.start()
         self.logger.info("done init")
 
