@@ -19,21 +19,33 @@ def parse_string(client, message):
     client.actual_results.append(result)
     logging.info(newSpltMsg)
 
-    client.total_flips = client.total_flips + 1 
-    client.num_heads = (client.num_heads + 1) if (result == "HEADS") else (client.num_heads)
+    client.total_flips = client.total_flips + 1
+    client.num_heads = (client.num_heads + 1) if (result == "HEADS") else client.num_heads
+    client.mle = (client.num_heads + .25 / client.total_flips + .5)
 
     for i in range (5, len(newSpltMsg), 3):
         #logging.info(newSpltMsg[i])
         username = newSpltMsg[i][1]
-        #logging.info(f"{username=}")
-        size_traded = int(newSpltMsg[i+1][1])
-        other_result = "HEADS" if (result == "TAILS") else "TAILS"
-        if username not in client.player_results:
-            client.player_results[username] = Player()
-        client.player_results[username].choices.append(result if size_traded > 0 else other_result)
-        #logging.info(client.player_results.get(username))
-        client.player_results[username].trades.append(size_traded)
-        client.player_results[username].total = int(newSpltMsg[i+2][1])
+
+        if username == client.username:
+            logging.info(f"{client.bet_amount=} {client.cur_strat=} {client.last_total=} cur_total={int(newSpltMsg[i+2][1])}")
+            money_diff = int(newSpltMsg[i+2][1]) - client.last_total
+            if money_diff > 0:
+                client.bet_amount += 20
+            if client.total_flips - client.last_check < 10 + client.total_flips / 40 and money_diff > -10000:
+                return
+            if int(newSpltMsg[i+2][1]) < client.last_total:
+                client.cur_strat = "HEADS" if client.cur_strat == "TAILS" else "TAILS"
+                logging.info(f"Bleading cash: {client.cur_strat=}")
+                client.bet_amount = 1000
+            else:
+                if money_diff / (client.total_flips - client.last_check) > 100:
+                    client.bet_amount += 1000
+            client.last_total = int(newSpltMsg[i+2][1])
+            client.last_check = client.total_flips
+            return
+
+
 
 
 def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
@@ -54,13 +66,10 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
        int
            Wager size.
     """
-    amount = 5000
-    if client.total_flips < 300:
-        return "HEADS" if (client.num_heads >= (client.total_flips / 2)) else "TAILS", amount
-    if client.total_flips > 200:
-        amount = 1000
-
-    return "HEADS" if (client.num_heads < (client.total_flips / 2)) else "TAILS", amount
+    bet = client.bet_amount
+    if client.mle > 0.55 and client.cur_strat == "TAILS" or client.mle < 0.45 and client.cur_strat == "HEADS":
+        bet = max(int(client.bet_amount / 1.3), 1000)
+    return client.cur_strat, int(bet)
 
 
 def stub_handle_auction_result(client, message: str) -> None:
@@ -165,6 +174,11 @@ class Client:
         self.total_flips = 0
         self.actual_results = list()
         self.player_results = dict()
+        self.last_total = 1000000
+        self.last_check = 0
+        self.cur_strat = "HEADS"
+        self.bet_amount = 1000
+        self.mle = 0.5
         logging.info("done init")
 
     def run(self):
