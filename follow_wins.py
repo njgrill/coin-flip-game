@@ -19,21 +19,57 @@ def parse_string(client, message):
     client.actual_results.append(result)
     logging.info(newSpltMsg)
 
-    client.total_flips = client.total_flips + 1 
+    client.total_flips = client.total_flips + 1
     client.num_heads = (client.num_heads + 1) if (result == "HEADS") else (client.num_heads)
 
+    for_head = 0
+    for_tail = 0
+    num_for_head = 0
+    num_for_tail = 0
     for i in range (5, len(newSpltMsg), 3):
         #logging.info(newSpltMsg[i])
         username = newSpltMsg[i][1]
         #logging.info(f"{username=}")
         size_traded = int(newSpltMsg[i+1][1])
         other_result = "HEADS" if (result == "TAILS") else "TAILS"
+        if size_traded > 0:
+            if result == "HEADS":
+                num_for_head += 1
+                for_head += size_traded
+            else:
+                num_for_tail += 1
+                for_tail += size_traded
+        else:
+            if result == "HEAD":
+                num_for_tail += 1
+                for_tail -= size_traded
+            else:
+                num_for_head += 1
+                for_head -= size_traded
+
         if username not in client.player_results:
             client.player_results[username] = Player()
         client.player_results[username].choices.append(result if size_traded > 0 else other_result)
         #logging.info(client.player_results.get(username))
         client.player_results[username].trades.append(size_traded)
         client.player_results[username].total = int(newSpltMsg[i+2][1])
+    logging.info(f"{for_head=} {for_tail=}")
+    if for_head + for_tail > 0:
+        client.for_head = for_head
+        client.for_tail = for_tail
+        client.num_for_head = num_for_head
+        client.num_for_tail = num_for_tail
+
+        if result == "HEADS":
+            client.heads_wins.insert(0, 1 + (for_head + for_tail) / (for_head + 100))
+            client.tails_wins.insert(0, -1)
+        else:
+            client.tails_wins.insert(0, 1 + (for_head + for_tail) / (for_tail + 100))
+            client.heads_wins.insert(0, -1)
+
+        if len(client.heads_wins) > 5:
+            client.heads_wins.pop()
+            client.tails_wins.pop()
 
 
 def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
@@ -54,13 +90,32 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
        int
            Wager size.
     """
-    amount = 5000
-    if client.total_flips < 300:
-        return "HEADS" if (client.num_heads >= (client.total_flips / 2)) else "TAILS", amount
-    if client.total_flips > 200:
-        amount = 1000
+    # amount_heads =
+    logging.info(f"{client.heads_wins=} {client.tails_wins=}")
+    avg_tails = sum(client.tails_wins) / 5
+    avg_heads = sum(client.heads_wins) / 5
+    logging.info(f"{avg_heads=} {avg_tails=}")
+    client.mle = (client.num_heads + .25) / (client.total_flips + .5)
+    if client.total_flips < 60:
+        if .3 < client.mle < .7:
+            return random.choice(["HEADS", "TAILS"]), 3000
+        return "HEADS" if client.mle > 0.5 else "TAILS", 3000
 
-    return "HEADS" if (client.num_heads < (client.total_flips / 2)) else "TAILS", amount
+    if avg_heads > avg_tails:
+        amount = int(
+            min(
+                max(2 * client.for_head / (max(client.num_for_head, 1) + 50 * client.mle ** 2), 1000), 10000))
+        if client.mle > .5:
+            return "HEADS", 5000
+        else:
+            return "HEADS", 1000
+    else:
+        amount = int(
+            min(max(2 * client.for_tail / (max(client.num_for_tail, 1) + 50 * (1 - client.mle) ** 2), 1000), 10000))
+        if client.mle < .5:
+            return "TAILS", 5000
+        else:
+            return "TAILS", 1000
 
 
 def stub_handle_auction_result(client, message: str) -> None:
@@ -165,6 +220,13 @@ class Client:
         self.total_flips = 0
         self.actual_results = list()
         self.player_results = dict()
+        self.for_head = 10
+        self.for_tail = 10
+        self.num_for_head = 1
+        self.num_for_tail = 1
+
+        self.heads_wins = []
+        self.tails_wins = []
         logging.info("done init")
 
     def run(self):
