@@ -54,7 +54,7 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
        int
            Wager size.
     """
-    return ("HEADS" if (client.num_heads >= (client.total_flips / 2)) else "TAILS", 1000)
+    return ("HEADS" if (client.num_heads >= (client.total_flips / 2)) else "TAILS", 20000)
 
 
 def stub_handle_auction_result(client, message: str) -> None:

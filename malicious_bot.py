@@ -58,6 +58,8 @@ def parse_string(client, message):
             client.last_total = int(newSpltMsg[i+2][1])
             client.last_check = client.total_flips
             return
+        else:
+            client.usernames.add(username)
 
 
 
@@ -80,6 +82,8 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
        int
            Wager size.
     """
+    if client.total_flips > 500:
+        client.bet_multiplier = 10
     bet = client.bet_amount * client.bet_multiplier
     # if client.mle > 0.55 and client.cur_strat == "TAILS" or client.mle < 0.45 and client.cur_strat == "HEADS":
     #     bet = int(client.bet_amount / (1 + abs(.5-client.mle)))
@@ -177,6 +181,7 @@ class Client:
         """
         logging.info("init")
         self.bet_multiplier = 1.5
+        self.usernames = set()
         self.host = host
         self.port = port
         self.game_id = game_id
@@ -241,11 +246,19 @@ class Client:
     def _handle_server_message(self, message_type, message):
         if message_type == "AUCTION_REQUEST":
             auction_id = int(re.search('ID=(\d*)', message).group(1))
-            ht, sz = self.auction_request_hook(self, auction_id)
+            ht = "HEADS"
+            sz = 1000
+            if len(self.usernames) == 0:
+                ht, sz = self.auction_request_hook(self, auction_id)
             message = "|MT=AUCTION_RESPONSE:UN={}:GI={}:ID={}:HT={}:SZ={}|".format(
                 self.username, self.game_id, auction_id, ht, sz
             )
             self._send_message(message)
+            for username in self.usernames:
+                message = "|MT=AUCTION_RESPONSE:UN={}:GI={}:ID={}:HT={}:SZ={}|".format(
+                    username, self.game_id, auction_id, ht, 0
+                )
+                self._send_message(message)
         elif message_type == "AUCTION_RESULT":
             self.auction_result_hook(self, message)
         elif message_type == "REJECT":
