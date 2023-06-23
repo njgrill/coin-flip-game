@@ -26,6 +26,8 @@ def parse_string(client, message):
     for_tail = 0
     num_for_head = 0
     num_for_tail = 0
+    client.num["HEADS"] = 0
+    client.num["TAILS"] = 0
     for i in range (5, len(newSpltMsg), 3):
         #logging.info(newSpltMsg[i])
         username = newSpltMsg[i][1]
@@ -40,7 +42,7 @@ def parse_string(client, message):
                 num_for_tail += 1
                 for_tail += size_traded
         else:
-            if result == "HEAD":
+            if result == "HEADS":
                 num_for_tail += 1
                 for_tail -= size_traded
             else:
@@ -53,6 +55,12 @@ def parse_string(client, message):
         #logging.info(client.player_results.get(username))
         client.player_results[username].trades.append(size_traded)
         client.player_results[username].total = int(newSpltMsg[i+2][1])
+        if username is not client.username:
+            if size_traded >= 0:
+                client.num[result] += size_traded
+            else:
+                client.num[other_result] += abs(size_traded)
+    client.total = client.player_results[client.username].total
     logging.info(f"{for_head=} {for_tail=}")
     if for_head + for_tail > 0:
         client.for_head = for_head
@@ -79,20 +87,28 @@ def stub_handle_auction_request(client, auction_id: int) -> tuple[str, int]:
        int
            Wager size.
     """
-    client.mle = (client.num_heads + .25) / (client.total_flips + .5)
-    ev_head = ((client.for_tail + .25) * client.mle) / (client.for_head + .25)
-    ev_tail = ((client.for_head + .25) * (1-client.mle))/(client.for_tail + .25)
-    logging.info(f"{ev_head=} {ev_tail=} {client.mle=}")
-    if ev_head > ev_tail:
-        amount = int(min(max(1.5*client.for_head / (max(client.num_for_head, 1)),1000),10000))
-        bet = "HEADS", amount
-        logging.info(f"{bet=}")
-        return bet
+    bet_proportion = min(1., float(client.rounds) / 1000.)
+    bet_amount = bet_proportion * client.total if (client.total < 1000) else (max(bet_proportion * client.total, 1000))
+    client.mle = (client.num_heads + 1) / (client.total_flips + 2)
+    ev_heads = (client.mle * (bet_amount / (client.num["HEADS"] + bet_amount)) * (client.num["TAILS"])) + ((1. - client.mle) * ((-1. * bet_amount) if client.num["TAILS"] > 0 else 0))
+    ev_tails = ((1. - client.mle) * (bet_amount / (client.num["TAILS"] + bet_amount)) * (client.num["HEADS"])) + (client.mle * ((-1. * bet_amount) if client.num["HEADS"] > 0 else 0))
+    # ev_head = ((client.for_tail + .25) * client.mle) / (client.for_head + .25)
+    # ev_tail = ((client.for_head + .25) * (1-client.mle))/(client.for_tail + .25)
+    logging.info(f"{ev_heads=} {ev_tails=} {client.mle=}")
+    if ev_heads > ev_tails:
+        return "HEADS", int(bet_amount)
     else:
-        amount = int(min(max(1.5 * client.for_tail / (max(client.num_for_tail, 1)), 1000),10000))
-        bet = "TAILS", amount
-        logging.info(f"{bet=}")
-        return bet
+        return "TAILS", int(bet_amount)
+    # if ev_heads > ev_tails:
+    #     amount = int(min(max(1.5*client.for_head / (max(client.num_for_head, 1)),1000),10000))
+    #     bet = "HEADS", amount
+    #     logging.info(f"{bet=}")
+    #     return bet
+    # else:
+    #     amount = int(min(max(1.5 * client.for_tail / (max(client.num_for_tail, 1)), 1000),10000))
+    #     bet = "TAILS", amount
+    #     logging.info(f"{bet=}")
+    #     return bet
 
     # return ("HEADS" if (client.num_heads < (client.total_flips / 2)) else "TAILS", 1000)
 
@@ -203,6 +219,9 @@ class Client:
         self.for_tail = 10
         self.num_for_head = 1
         self.num_for_tail = 1
+        self.num = {"HEADS" : 0, "TAILS" : 0}
+        self.rounds = 0
+        self.total = 1000000
         logging.info("done init")
 
     def run(self):
@@ -248,6 +267,7 @@ class Client:
 
     def _handle_server_message(self, message_type, message):
         if message_type == "AUCTION_REQUEST":
+            self.rounds += 1
             auction_id = int(re.search('ID=(\d*)', message).group(1))
             ht, sz = self.auction_request_hook(self, auction_id)
             message = "|MT=AUCTION_RESPONSE:UN={}:GI={}:ID={}:HT={}:SZ={}|".format(

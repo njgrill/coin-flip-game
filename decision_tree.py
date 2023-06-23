@@ -60,7 +60,8 @@ def agg_convert_to_features(raw_inputs, raw_outputs):
         all_outputs = all_outputs[1:]
     else:
         agg_helper_featurize_outputs(raw_inputs, raw_outputs)
-    return all_inputs[:-1], all_outputs
+    # return all_inputs[:-1], all_outputs
+    return all_inputs, all_outputs
 
 def convert_to_features(featureType, raw_inputs, raw_outputs):
     if featureType == "Agg":
@@ -84,23 +85,26 @@ def train_model(sharedInfo: SharedInformation, featureType: str, logger):
                 logger.info(f"IMPORTANT: {curr_inputs=}")
                 logger.info(f"IMPORTANT: {curr_outputs=}")
 
-            if (len(curr_inputs) > 0):
+            if (len(curr_inputs[:-1]) > 0):
                 # logging.debug(f"{curr_inputs=}")
                 # logging.debug(f"{curr_outputs=}")
-                if (len(curr_outputs) > 5):
-                    curr_inputs = curr_inputs[-5:]
-                    curr_outputs = curr_outputs[-5:]
+                # if (len(curr_outputs) > 5):
+                #     curr_inputs = curr_inputs[-5:]
+                #     curr_outputs = curr_outputs[-5:]
                 clf = tree.DecisionTreeRegressor(max_depth=MAX_DEPTH)
-                logger.info("fitting model...")
-                clf.fit(curr_inputs, curr_outputs)
-                
-                # Send model
-                logging.debug("IMPORTANT: test prediction")
-                logging.debug(clf.predict([curr_inputs[-1]]))
-                logger.info("copying decision tree...")
-                sharedInfo.copy_decision_tree(clf)
-                curr_inputs = []
-                curr_outputs = []
+                # logger.info("fitting model...")
+                if (len(curr_inputs) > 100):
+                    clf.fit(curr_inputs[-101:-1], curr_outputs[-100:])
+                    sharedInfo.copy_decision_tree(clf)
+                    logger.info("copying decision tree...")
+                    
+                    # Send model
+                    logging.debug("IMPORTANT: test prediction")
+                    # logging.debug(f"VERY CRUCIAL: Predicting: {clf.predict([curr_inputs[-1]])} compared to {curr_outputs[-1]}")
+                    for i in range(0, len(curr_outputs)):
+                        logging.debug(f"VERY CRUCIAL: Predicting: {clf.predict([curr_inputs[i]])} compared to {curr_outputs[i]}")
+                    curr_inputs = []
+                    curr_outputs = []
             curr_round += len(raw_outputs)
         except Exception as e:
             logger.error(e)

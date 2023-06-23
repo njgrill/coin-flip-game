@@ -5,7 +5,9 @@ import os
 import uuid
 from subprocess import Popen, PIPE
 
-bot_scripts = ["simple_mle_estimation.py", "random_bot.py", "follow_wins.py", "switch_strat.py", "mle_estimation.py", "big_brain_estimation.py", "anti_mle_estimation.py", "malicious_bot.py"]
+bot_scripts = ["simple_mle_estimation.py", "random_bot.py", "follow_wins.py", "switch_strat.py", "mle_estimation.py", "big_brain_estimation.py", "anti_mle_estimation.py", "malicious_bot.py", "agg_bot.py"]
+# bot_scripts = ["random_bot.py"]
+# bot_scripts = ["random_bot.py" for _ in range(10)]
 
 parser = argparse.ArgumentParser()
 parser.add_argument("host")
