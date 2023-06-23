@@ -17,21 +17,21 @@ def parse_string(client, message):
     newSpltMsg = [elem.split('=') for elem in spltMsg]
     result = newSpltMsg[3][1]
     client.actual_results.append(result)
-    logging.info(newSpltMsg)
+    logging.debug(newSpltMsg)
 
     client.total_flips = client.total_flips + 1 
     client.num_heads = (client.num_heads + 1) if (result == "HEADS") else (client.num_heads)
 
     for i in range (5, len(newSpltMsg), 3):
-        logging.info(newSpltMsg[i])
+        logging.debug(newSpltMsg[i])
         username = newSpltMsg[i][1]
-        logging.info(f"{username=}")
+        logging.debug(f"{username=}")
         size_traded = int(newSpltMsg[i+1][1])
         other_result = "HEADS" if (result == "TAILS") else "TAILS"
         if username not in client.player_results:
             client.player_results[username] = Player()
         client.player_results[username].choices.append(result if size_traded > 0 else other_result)
-        logging.info(client.player_results.get(username))
+        logging.debug(client.player_results.get(username))
         client.player_results[username].trades.append(size_traded)
         client.player_results[username].total = int(newSpltMsg[i+2][1])
 
@@ -69,9 +69,9 @@ def stub_handle_auction_result(client, message: str) -> None:
            Raw `MT=AUCTION_RESULT` message sent by the Auction Exchange Server.
     """
     # ['MT', 'GI', 'ID', 'HT', 'TS', ['UN', 'SZ', 'TO'] ]
-    logging.info("about to parse string")
+    logging.debug("about to parse string")
     parse_string(client, message)
-    logging.info(client.player_results)
+    logging.debug(client.player_results)
 
 
 class Client:
@@ -116,8 +116,8 @@ class Client:
         username = parsed_args.username
 
         logging.basicConfig(filename=f"./logs/{game_id}/{parsed_args.output_logs}", encoding='utf-8', level=logging.DEBUG)
-        logging.info(parsed_args)
-        logging.info(f"{host} {port} {game_id} {username}")
+        logging.debug(parsed_args)
+        logging.debug(f"{host} {port} {game_id} {username}")
         return Client(
             host=host,
             port=port,
@@ -146,7 +146,7 @@ class Client:
            auction_result_hook
                Function callback for the raw `MT=AUCTION_RESULT` message string received from the Auction Exchange Server.
         """
-        logging.info("init")
+        logging.debug("init")
         self.host = host
         self.port = port
         self.game_id = game_id
@@ -159,19 +159,19 @@ class Client:
         self.total_flips = 0
         self.actual_results = list()
         self.player_results = dict()
-        logging.info("done init")
+        logging.debug("done init")
 
     def run(self):
         """
            Log into the Auction Exchange Server and respond to auction requests.
         """
-        logging.info("run")
-        logging.info(f"{self.host} {self.port} {self.username} {self.game_id}")
+        logging.debug("run")
+        logging.debug(f"{self.host} {self.port} {self.username} {self.game_id}")
         try:
             self.sock.connect((self.host, self.port))
         except Exception as e:
             logging.error(e)
-        logging.info("connected")
+        logging.debug("connected")
         logging.debug("|MT=LOGIN:GI={}:UN={}|".format(self.game_id, self.username))
         self._send_message("|MT=LOGIN:GI={}:UN={}|".format(self.game_id, self.username))
 
@@ -190,14 +190,14 @@ class Client:
         if not res:
             raise Exception("Server socket closed")
         received += res.decode("ascii")
-        logging.info(received)
+        logging.debug(received)
         match = self._MESSAGE_PATTERN.search(received)
         if match is None:
             return received
 
         message = match.group(0)
         message_type = match.group(1)
-        logging.info(message)
+        logging.debug(message)
         self._handle_server_message(message_type, message)
         received = received[len(message):]
         return received
@@ -209,6 +209,7 @@ class Client:
             message = "|MT=AUCTION_RESPONSE:UN={}:GI={}:ID={}:HT={}:SZ={}|".format(
                 self.username, self.game_id, auction_id, ht, sz
             )
+            logging.debug(f"IMPORTANT: Sending for round {auction_id=}")
             self._send_message(message)
         elif message_type == "AUCTION_RESULT":
             self.auction_result_hook(self, message)
@@ -219,6 +220,7 @@ class Client:
             sys.exit(0)
 
     def _send_message(self, message):
+        logging.debug(f"Socket message {message=}")
         self.sock.sendall(bytes(message, "ascii"))
 
 client = Client.initialize_client()
